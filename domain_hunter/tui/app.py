@@ -279,8 +279,9 @@ class DomainHunterApp(App[None]):
 
         if res.domain in self.row_keys:
             try:
+                col_keys = list(table.columns.keys())
                 for col_idx, val in enumerate(row_data):
-                    table.update_cell(res.domain, table.columns[col_idx].key, val)
+                    table.update_cell(res.domain, col_keys[col_idx], val)
             except Exception:
                 pass
         else:

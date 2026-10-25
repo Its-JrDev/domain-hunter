@@ -84,9 +84,17 @@ Screen {
 }
 
 .tld-check {
-    margin-right: 1;
-    padding: 0;
+    border: none !important;
+    padding: 0 1;
     height: 1;
+    width: auto;
+    margin-right: 1;
+    background: transparent;
+}
+
+.tld-check:focus {
+    border: none !important;
+    background: $primary 30%;
 }
 
 #filter-stats-bar {
@@ -99,8 +107,11 @@ Screen {
 }
 
 #chk-available-only {
+    border: none !important;
+    height: 1;
     width: auto;
     margin-right: 3;
+    background: transparent;
 }
 
 #stats-label {
