@@ -1,316 +1,455 @@
-"""Aplicación TUI principal de Domain Hunter construida con Textual."""
+"""Aplicación TUI moderna estilo OpenCode para Domain Hunter.
+Disposición en 3 columnas divididas: Historial de Sesiones, Resultados y Live Inspector.
+"""
 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import (
     Button,
-    Checkbox,
     DataTable,
     Footer,
     Header,
     Input,
     Label,
+    OptionList,
     Static,
 )
+from textual.widgets.option_list import Option
 
 from domain_hunter.engine import DomainEngine, DomainResult
-from domain_hunter.tui.modals import DomainDetailModal, ExportModal, GeneratorModal
+from domain_hunter.tui.modals import ExportModal, GeneratorModal, TLDSelectorModal
 
-DEFAULT_TLDS = [
-    "com",
-    "io",
-    "ai",
-    "dev",
-    "app",
-    "co",
-    "xyz",
-    "es",
-    "net",
-    "org",
-    "me",
-    "tech",
-    "online",
-    "lat",
-    "mx",
-]
-
-PRESETS: dict[str, list[str]] = {
-    "preset-pop": ["com", "net", "org", "co"],
-    "preset-tech": ["ai", "io", "dev", "app", "tech"],
-    "preset-modern": ["xyz", "me", "online", "tech", "lat"],
-    "preset-es": ["es", "lat", "mx", "co", "com"],
+PRESET_LISTS: dict[str, list[str]] = {
+    "Populares": ["com", "net", "org", "co"],
+    "Tech/AI": ["ai", "io", "dev", "app", "tech", "sh"],
+    "Globales": ["xyz", "me", "online", "cloud", "store", "info"],
+    "Latam/ES": ["es", "lat", "mx", "cl", "co", "com"],
 }
 
 CSS_PATH = Path(__file__).parent / "styles.tcss"
+
+
+@dataclass
+class SearchSession:
+    """Representa una sesión individual de búsqueda para evitar apilamientos."""
+    id: str
+    query: str
+    created_at: str
+    results: dict[str, DomainResult] = field(default_factory=dict)
+    tlds: list[str] = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return len(self.results)
+
+    @property
+    def available_count(self) -> int:
+        return sum(1 for r in self.results.values() if r.is_available)
+
+    @property
+    def taken_count(self) -> int:
+        return sum(1 for r in self.results.values() if r.is_taken)
+
+    @property
+    def label(self) -> str:
+        if self.total == 0:
+            return f"🔍 {self.query}"
+        return f"● {self.query}  [green]{self.available_count}[/]/[dim]{self.total}[/]"
 
 
 class DomainHunterApp(App[None]):
     """Aplicación TUI para la búsqueda de dominios disponibles."""
 
     TITLE = "DOMAIN HUNTER"
-    SUB_TITLE = "Buscador Asíncrono de Dominios Disponibles"
+    SUB_TITLE = "Buscador Asíncrono de Dominios"
     CSS_PATH = CSS_PATH
 
     BINDINGS = [
         Binding("q", "quit", "Salir", show=True),
-        Binding("s", "focus_search", "Buscar (/)", show=True),
-        Binding("/", "focus_search", "Buscar", show=False),
-        Binding("d", "toggle_available_only", "Solo Disponibles", show=True),
-        Binding("g", "open_generator", "Generador Ideas", show=True),
+        Binding("/", "focus_search", "Buscar (/)", show=True),
+        Binding("d", "toggle_filter", "Solo Disponibles", show=True),
+        Binding("t", "toggle_presets", "TLDs", show=True),
+        Binding("g", "open_generator", "Ideas", show=True),
         Binding("e", "open_export", "Exportar", show=True),
-        Binding("f", "toggle_favorite", "Favorito ⭐", show=True),
-        Binding("c", "clear_all", "Limpiar", show=True),
+        Binding("c", "copy_domain", "Copiar", show=True),
     ]
 
     def __init__(self, initial_query: str | None = None) -> None:
         super().__init__()
         self.engine = DomainEngine()
         self.initial_query = initial_query
-        self.all_results: dict[str, DomainResult] = {}
-        self.row_keys: dict[str, str] = {}
+        self.sessions: dict[str, SearchSession] = {}
+        self.active_session_id: str | None = None
+        self.selected_domain: str | None = None
+        self.available_only: bool = False
+        self.current_preset: str = "Populares"
+        self.active_tlds: list[str] = list(PRESET_LISTS["Populares"])
         self.search_task: asyncio.Task | None = None
+        self.session_counter = 0
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
-        with Vertical(id="top-panel"):
-            with Horizontal(id="search-row"):
+        with Vertical(id="top-bar"):
+            with Horizontal(id="search-box"):
                 yield Input(
-                    placeholder="Escribe palabra o dominio (ej: novatech o novatech.com)...",
+                    placeholder="🔍 Escribe una palabra o dominio (ej: novatech o novatech.com) y presiona Enter...",
                     id="search-input",
                     value=self.initial_query or "",
                 )
-                yield Button("Buscar", variant="primary", id="btn-search")
-                yield Button("⚡ Ideas", variant="default", id="btn-generator")
-                yield Button("Limpiar", variant="default", id="btn-clear")
+                yield Button("Buscar", variant="primary", id="btn-search", classes="action-btn btn-primary")
+                yield Button("+ Nueva", id="btn-new", classes="action-btn")
 
-            with Vertical(id="tld-panel"):
-                yield Label("Presets rápidos:", classes="section-label")
-                with Horizontal(id="preset-buttons"):
-                    yield Button("⭐ Populares", id="preset-pop", classes="preset-btn")
-                    yield Button("⚡ Tech / AI", id="preset-tech", classes="preset-btn")
-                    yield Button("🌐 Modernos", id="preset-modern", classes="preset-btn")
-                    yield Button("🌎 Latam/ES", id="preset-es", classes="preset-btn")
-                    yield Button("Todos", id="preset-all", classes="preset-btn")
-                    yield Button("Ninguno", id="preset-none", classes="preset-btn")
+        with Horizontal(id="main-split"):
+            # Columna Izquierda: Historial de Sesiones
+            with Vertical(id="sidebar-pane", classes="split-pane"):
+                yield Label("📂 SESIONES", classes="pane-header")
+                yield OptionList(id="sessions-list")
+                with Horizontal(id="sidebar-footer"):
+                    yield Button("Limpiar Todo", id="btn-clear-all", classes="pill-btn")
 
-                with Horizontal(id="tld-checkboxes"):
-                    for tld in DEFAULT_TLDS:
-                        yield Checkbox(f".{tld}", value=True, id=f"tld-{tld}", classes="tld-check")
+            # Columna Central: Lista de Resultados
+            with Vertical(id="results-pane", classes="split-pane"):
+                yield Label("📋 RESULTADOS", id="results-header", classes="pane-header")
+                table = DataTable(id="results-table", cursor_type="row")
+                table.add_columns("●", "Dominio", "TLD", "Estado", "Registrador", "Expira")
+                yield table
 
-        with Horizontal(id="filter-stats-bar"):
-            yield Checkbox("Solo disponibles", value=False, id="chk-available-only")
-            yield Static("Consultados: 0 | Disponibles: 0 | Ocupados: 0", id="stats-label")
+            # Columna Derecha: Inspector en Vivo
+            with Vertical(id="inspector-pane", classes="split-pane"):
+                yield Label("ℹ INSPECTOR EN VIVO", classes="pane-header")
+                with VerticalScroll(id="inspector-content"):
+                    yield Static("[dim]Selecciona un dominio para inspeccionar sus detalles...[/dim]", id="inspector-body")
 
-        with Container(id="table-container"):
-            table = DataTable(id="results-table", cursor_type="row")
-            table.add_columns("Fav", "Estado", "Dominio", "TLD", "Registrador", "Expira", "Notas")
-            yield table
+        # Barra de Controles Inferior
+        with Horizontal(id="bottom-bar"):
+            yield Button("Filtro: Todos", id="btn-toggle-filter", classes="pill-btn")
+            yield Button(f"TLDs: {self.current_preset} ▾", id="btn-preset-toggle", classes="pill-btn")
+            yield Button("+ Custom TLDs", id="btn-custom-tlds", classes="pill-btn")
+            yield Button("⚡ Variaciones", id="btn-generator", classes="pill-btn")
+            yield Button("📁 Exportar", id="btn-export", classes="pill-btn")
+            yield Static("Total: 0 | Disponibles: 0", id="status-stats")
 
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#search-input", Input).focus()
         if self.initial_query:
-            self.action_start_search()
-
-    def _get_active_tlds(self) -> list[str]:
-        active: list[str] = []
-        for tld in DEFAULT_TLDS:
-            try:
-                chk = self.query_one(f"#tld-{tld}", Checkbox)
-                if chk.value:
-                    active.append(tld)
-            except Exception:
-                pass
-        return active or ["com"]
+            self.action_start_search(self.initial_query)
 
     def action_focus_search(self) -> None:
         self.query_one("#search-input", Input).focus()
 
-    def action_toggle_available_only(self) -> None:
-        chk = self.query_one("#chk-available-only", Checkbox)
-        chk.value = not chk.value
-        self._refresh_table()
+    def action_toggle_filter(self) -> None:
+        self.available_only = not self.available_only
+        btn = self.query_one("#btn-toggle-filter", Button)
+        if self.available_only:
+            btn.label = "Filtro: Solo Disponibles"
+            btn.add_class("pill-active")
+        else:
+            btn.label = "Filtro: Todos"
+            btn.remove_class("pill-active")
+        self._render_current_session_table()
 
-    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
-        if event.checkbox.id == "chk-available-only":
-            self._refresh_table()
+    def action_toggle_presets(self) -> None:
+        preset_names = list(PRESET_LISTS.keys())
+        idx = preset_names.index(self.current_preset) if self.current_preset in preset_names else 0
+        next_idx = (idx + 1) % len(preset_names)
+        self.current_preset = preset_names[next_idx]
+        self.active_tlds = list(PRESET_LISTS[self.current_preset])
+        self.query_one("#btn-preset-toggle", Button).label = f"TLDs: {self.current_preset} ▾"
 
     def action_open_generator(self) -> None:
-        def _handle_generator_words(words: list[str] | None) -> None:
+        def _handle_words(words: list[str] | None) -> None:
             if words:
-                self._run_bulk_search(words)
+                for w in words[:15]:
+                    self.action_start_search(w)
 
-        self.push_screen(GeneratorModal(), _handle_generator_words)
+        self.push_screen(GeneratorModal(), _handle_words)
 
     def action_open_export(self) -> None:
-        self.push_screen(ExportModal(list(self.all_results.values())))
+        sess = self._get_active_session()
+        items = list(sess.results.values()) if sess else []
+        self.push_screen(ExportModal(items))
 
-    def action_clear_all(self) -> None:
-        if self.search_task and not self.search_task.done():
-            self.search_task.cancel()
-        self.all_results.clear()
-        self.row_keys.clear()
-        table = self.query_one("#results-table", DataTable)
-        table.clear()
-        self._update_stats()
-
-    def action_toggle_favorite(self) -> None:
-        table = self.query_one("#results-table", DataTable)
-        if table.row_count == 0 or table.cursor_row is None:
-            return
-        row_key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
-        dom_name = str(row_key.value) if row_key else ""
-        if dom_name in self.all_results:
-            res = self.all_results[dom_name]
-            res.is_favorite = not res.is_favorite
-            self._update_row_in_table(res)
+    def action_copy_domain(self) -> None:
+        if self.selected_domain:
+            try:
+                import subprocess
+                # Intentar copiar a portapapeles si xclip/wl-copy está disponible
+                subprocess.run(["xclip", "-selection", "clipboard"], input=self.selected_domain.encode(), check=False)
+            except Exception:
+                pass
+            self.notify(f"Copiado: {self.selected_domain}")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        b_id = event.button.id or ""
+        b_id = event.button.id
         if b_id == "btn-search":
-            self.action_start_search()
+            query = self.query_one("#search-input", Input).value.strip()
+            if query:
+                self.action_start_search(query)
+        elif b_id == "btn-new":
+            inp = self.query_one("#search-input", Input)
+            inp.value = ""
+            inp.focus()
+        elif b_id == "btn-toggle-filter":
+            self.action_toggle_filter()
+        elif b_id == "btn-preset-toggle":
+            self.action_toggle_presets()
+        elif b_id == "btn-custom-tlds":
+            def _handle_tlds(selected: list[str] | None) -> None:
+                if selected:
+                    self.active_tlds = selected
+                    self.current_preset = "Personalizado"
+                    self.query_one("#btn-preset-toggle", Button).label = "TLDs: Personalizado ▾"
+            self.push_screen(TLDSelectorModal(self.active_tlds), _handle_tlds)
         elif b_id == "btn-generator":
             self.action_open_generator()
-        elif b_id == "btn-clear":
-            self.action_clear_all()
-        elif b_id in PRESETS:
-            selected = PRESETS[b_id]
-            for tld in DEFAULT_TLDS:
-                try:
-                    chk = self.query_one(f"#tld-{tld}", Checkbox)
-                    chk.value = tld in selected
-                except Exception:
-                    pass
-        elif b_id == "preset-all":
-            for tld in DEFAULT_TLDS:
-                try:
-                    self.query_one(f"#tld-{tld}", Checkbox).value = True
-                except Exception:
-                    pass
-        elif b_id == "preset-none":
-            for tld in DEFAULT_TLDS:
-                try:
-                    self.query_one(f"#tld-{tld}", Checkbox).value = False
-                except Exception:
-                    pass
+        elif b_id == "btn-export":
+            self.action_open_export()
+        elif b_id == "btn-clear-all":
+            self._clear_all_sessions()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "search-input":
-            self.action_start_search()
+            query = event.input.value.strip()
+            if query:
+                self.action_start_search(query)
 
-    def action_start_search(self) -> None:
-        val = self.query_one("#search-input", Input).value.strip().lower()
-        if not val:
+    def action_start_search(self, raw_query: str) -> None:
+        clean_query = raw_query.strip().lower()
+        if not clean_query:
             return
 
-        # Si el input tiene punto (ej. "proyecto.com"), buscar ese directamente
-        if "." in val:
-            domains_to_check = [val]
+        self.session_counter += 1
+        sess_id = f"sess_{self.session_counter}"
+        now_str = datetime.now().strftime("%H:%M:%S")
+
+        # Determinar lista de dominios a verificar
+        if "." in clean_query:
+            domains = [clean_query]
         else:
-            tlds = self._get_active_tlds()
-            domains_to_check = [f"{val}.{tld}" for tld in tlds]
+            domains = [f"{clean_query}.{tld}" for tld in self.active_tlds]
 
-        self._run_bulk_search(domains_to_check)
+        session = SearchSession(
+            id=sess_id,
+            query=clean_query,
+            created_at=now_str,
+            tlds=list(self.active_tlds),
+        )
 
-    def _run_bulk_search(self, domains_to_check: list[str]) -> None:
+        for d in domains:
+            session.results[d] = DomainResult(domain=d, tld=d.split(".")[-1], status="querying")
+
+        self.sessions[sess_id] = session
+        self.active_session_id = sess_id
+
+        # Agregar al OptionList lateral
+        ol = self.query_one("#sessions-list", OptionList)
+        ol.add_option(Option(session.label, id=sess_id))
+        ol.highlighted = ol.option_count - 1
+
+        self._render_current_session_table()
+
+        # Iniciar tarea asíncrona de búsqueda para esta sesión
         if self.search_task and not self.search_task.done():
             self.search_task.cancel()
+        self.search_task = asyncio.create_task(self._search_worker(session, domains))
 
-        table = self.query_one("#results-table", DataTable)
-        for d in domains_to_check:
-            if d not in self.all_results:
-                placeholder = DomainResult(domain=d, tld=d.split(".")[-1], status="querying")
-                self.all_results[d] = placeholder
-                self._add_or_update_row(placeholder)
-
-        self._update_stats()
-        self.search_task = asyncio.create_task(self._search_worker(domains_to_check))
-
-    async def _search_worker(self, domains: list[str]) -> None:
+    async def _search_worker(self, session: SearchSession, domains: list[str]) -> None:
         try:
-            async for result in self.engine.check_domains_stream(domains, max_concurrency=8):
-                self.all_results[result.domain] = result
-                self._add_or_update_row(result)
-                self._update_stats()
+            async for result in self.engine.check_domains_stream(domains, max_concurrency=10):
+                session.results[result.domain] = result
+                # Si esta sesión es la activa, actualizar la tabla
+                if self.active_session_id == session.id:
+                    self._update_row_in_table(result)
+                    self._update_stats()
+                    if self.selected_domain == result.domain:
+                        self._render_inspector(result)
+
+                # Actualizar etiqueta en el historial
+                try:
+                    ol = self.query_one("#sessions-list", OptionList)
+                    ol.replace_option_prompt(session.id, session.label)
+                except Exception:
+                    pass
         except asyncio.CancelledError:
             pass
 
-    def _add_or_update_row(self, res: DomainResult) -> None:
-        table = self.query_one("#results-table", DataTable)
-        avail_only = self.query_one("#chk-available-only", Checkbox).value
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        sess_id = event.option_id
+        if sess_id and sess_id in self.sessions:
+            self.active_session_id = sess_id
+            self._render_current_session_table()
 
-        # Si se filtra por solo disponibles y no está disponible ni consultando, no mostrar
-        if avail_only and res.status != "available" and res.status != "querying":
-            if res.domain in self.row_keys:
-                try:
-                    table.remove_row(res.domain)
-                    del self.row_keys[res.domain]
-                except Exception:
-                    pass
-            return
+    def _get_active_session(self) -> SearchSession | None:
+        if self.active_session_id and self.active_session_id in self.sessions:
+            return self.sessions[self.active_session_id]
+        return None
 
-        fav_str = "⭐" if res.is_favorite else ""
-        if res.status == "querying":
-            status_str = "[bold yellow]⏳ CONSULTANDO...[/bold yellow]"
-        elif res.status == "available":
-            status_str = "[bold green]✓ DISPONIBLE[/bold green]"
-        elif res.status == "taken":
-            status_str = "[bold red]✗ OCUPADO[/bold red]"
-        else:
-            status_str = "[dim]? INDETERMINADO[/dim]"
-
-        row_data = (
-            fav_str,
-            status_str,
-            f"[bold]{res.domain}[/bold]",
-            res.tld,
-            res.registrar or "-",
-            res.expiry_date or "-",
-            res.notes or ("Activo en DNS" if res.dns_active else "-"),
-        )
-
-        if res.domain in self.row_keys:
-            try:
-                col_keys = list(table.columns.keys())
-                for col_idx, val in enumerate(row_data):
-                    table.update_cell(res.domain, col_keys[col_idx], val)
-            except Exception:
-                pass
-        else:
-            table.add_row(*row_data, key=res.domain)
-            self.row_keys[res.domain] = res.domain
-
-    def _update_row_in_table(self, res: DomainResult) -> None:
-        self._add_or_update_row(res)
-
-    def _refresh_table(self) -> None:
+    def _render_current_session_table(self) -> None:
+        session = self._get_active_session()
         table = self.query_one("#results-table", DataTable)
         table.clear()
-        self.row_keys.clear()
-        for res in self.all_results.values():
-            self._add_or_update_row(res)
+
+        header_lbl = self.query_one("#results-header", Label)
+        if not session:
+            header_lbl.update("📋 RESULTADOS")
+            self._update_stats()
+            self._render_inspector(None)
+            return
+
+        header_lbl.update(f"📋 RESULTADOS: {session.query.upper()} ({len(session.results)} dominios)")
+
+        for res in session.results.values():
+            if self.available_only and not res.is_available and res.status != "querying":
+                continue
+            self._add_row_to_table(table, res)
+
         self._update_stats()
 
-    def _update_stats(self) -> None:
-        total = len(self.all_results)
-        avail = sum(1 for r in self.all_results.values() if r.is_available)
-        taken = sum(1 for r in self.all_results.values() if r.is_taken)
-        lbl = self.query_one("#stats-label", Static)
-        lbl.update(
-            f"Total: [bold]{total}[/] | "
-            f"Disponibles: [bold green]{avail}[/] | "
-            f"Ocupados: [bold red]{taken}[/]"
+        # Seleccionar automáticamente la primera fila para el inspector
+        if table.row_count > 0:
+            table.move_cursor(row=0)
+            first_dom = list(session.results.keys())[0]
+            self.selected_domain = first_dom
+            self._render_inspector(session.results.get(first_dom))
+        else:
+            self._render_inspector(None)
+
+    def _add_row_to_table(self, table: DataTable, res: DomainResult) -> None:
+        dot = "●"
+        if res.status == "available":
+            dot_styled = "[bold green]●[/bold green]"
+            st_styled = "[bold green]DISPONIBLE[/bold green]"
+        elif res.status == "taken":
+            dot_styled = "[bold red]●[/bold red]"
+            st_styled = "[bold red]OCUPADO[/bold red]"
+        else:
+            dot_styled = "[bold yellow]⏳[/bold yellow]"
+            st_styled = "[bold yellow]CONSULTANDO[/bold yellow]"
+
+        table.add_row(
+            dot_styled,
+            f"[bold]{res.domain}[/bold]",
+            res.tld,
+            st_styled,
+            res.registrar or "-",
+            res.expiry_date or "-",
+            key=res.domain,
         )
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+    def _update_row_in_table(self, res: DomainResult) -> None:
+        table = self.query_one("#results-table", DataTable)
+        col_keys = list(table.columns.keys())
+
+        if self.available_only and not res.is_available:
+            try:
+                table.remove_row(res.domain)
+            except Exception:
+                pass
+            return
+
+        if res.status == "available":
+            dot_styled = "[bold green]●[/bold green]"
+            st_styled = "[bold green]DISPONIBLE[/bold green]"
+        elif res.status == "taken":
+            dot_styled = "[bold red]●[/bold red]"
+            st_styled = "[bold red]OCUPADO[/bold red]"
+        else:
+            dot_styled = "[bold yellow]⏳[/bold yellow]"
+            st_styled = "[bold yellow]CONSULTANDO[/bold yellow]"
+
+        row_vals = [
+            dot_styled,
+            f"[bold]{res.domain}[/bold]",
+            res.tld,
+            st_styled,
+            res.registrar or "-",
+            res.expiry_date or "-",
+        ]
+
+        try:
+            for idx, val in enumerate(row_vals):
+                table.update_cell(res.domain, col_keys[idx], val)
+        except Exception:
+            try:
+                table.add_row(*row_vals, key=res.domain)
+            except Exception:
+                pass
+
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         dom_name = str(event.row_key.value) if event.row_key else ""
-        if dom_name in self.all_results:
-            self.push_screen(DomainDetailModal(self.all_results[dom_name]))
+        session = self._get_active_session()
+        if session and dom_name in session.results:
+            self.selected_domain = dom_name
+            self._render_inspector(session.results[dom_name])
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        self.on_data_table_row_highlighted(event)
+
+    def _render_inspector(self, res: DomainResult | None) -> None:
+        body = self.query_one("#inspector-body", Static)
+        if not res:
+            body.update("[dim]Selecciona un dominio para inspeccionar sus detalles...[/dim]")
+            return
+
+        lines: list[str] = [f"[bold white]{res.domain.upper()}[/bold white]\n"]
+
+        if res.status == "available":
+            lines.append("[bold green]● DISPONIBLE PARA REGISTRO[/bold green]\n")
+            lines.append("[bold cyan]Enlaces rápidos de compra:[/bold cyan]")
+            lines.append(f"• [underline]Cloudflare[/]: https://dash.cloudflare.com/?to=/:account/domains/register/{res.domain}")
+            lines.append(f"• [underline]Porkbun[/]:    https://porkbun.com/checkout/search?q={res.domain}")
+            lines.append(f"• [underline]Namecheap[/]:  https://www.namecheap.com/domains/registration/results/?domain={res.domain}\n")
+            lines.append("[dim]Presiona [b]c[/b] para copiar el dominio[/dim]")
+        elif res.status == "taken":
+            lines.append("[bold red]● DOMINIO REGISTRADO / OCUPADO[/bold red]\n")
+            lines.append(f"[bold cyan]Registrador:[/]  {res.registrar or 'Desconocido'}")
+            lines.append(f"[bold cyan]F. Registro:[/]  {res.created_date or 'No disponible'}")
+            lines.append(f"[bold cyan]F. Expira:[/]    {res.expiry_date or 'No disponible'}")
+            if res.nameservers:
+                lines.append(f"[bold cyan]DNS Servers:[/]  {', '.join(res.nameservers)}")
+            if res.status_codes:
+                lines.append(f"[bold cyan]Estados EPP:[/]  {', '.join(res.status_codes[:3])}")
+            if res.notes:
+                lines.append(f"[bold cyan]Notas:[/]        {res.notes}")
+            lines.append("\n[dim]Presiona [b]c[/b] para copiar el dominio[/dim]")
+        else:
+            lines.append("[bold yellow]⏳ Consultando disponibilidad en DNS / RDAP...[/bold yellow]")
+
+        body.update("\n".join(lines))
+
+    def _update_stats(self) -> None:
+        session = self._get_active_session()
+        stats = self.query_one("#status-stats", Static)
+        if not session:
+            stats.update("Total: 0 | Disponibles: 0")
+            return
+
+        total = session.total
+        avail = session.available_count
+        taken = session.taken_count
+        stats.update(
+            f"Sesión: [bold]{session.query}[/] | "
+            f"Total: [bold]{total}[/] | "
+            f"[green]Disponibles: {avail}[/] | "
+            f"[red]Ocupados: {taken}[/]"
+        )
+
+    def _clear_all_sessions(self) -> None:
+        if self.search_task and not self.search_task.done():
+            self.search_task.cancel()
+        self.sessions.clear()
+        self.active_session_id = None
+        self.selected_domain = None
+        self.query_one("#sessions-list", OptionList).clear_options()
+        self._render_current_session_table()

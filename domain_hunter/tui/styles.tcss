@@ -1,178 +1,261 @@
-/* Estilos TCSS para Domain Hunter */
+/* Estilos TCSS Modernos para Domain Hunter (Estilo OpenCode) */
 
 Screen {
     layout: vertical;
-    background: $surface;
-    color: $text;
+    background: #0d1117;
+    color: #e6edf3;
 }
 
-#top-panel {
-    height: auto;
-    padding: 1 2;
-    background: $panel;
-    border-bottom: solid $primary;
+/* Header & Top Bar */
+Header {
+    background: #161b22;
+    color: #58a6ff;
+    border-bottom: solid #30363d;
 }
 
-#search-row {
+#top-bar {
     height: auto;
+    padding: 1 1 0 1;
+    background: #0d1117;
+}
+
+#search-box {
     layout: horizontal;
+    height: 3;
     align: left middle;
-    margin-bottom: 1;
 }
 
 #search-input {
     width: 1fr;
+    height: 3;
+    border: round #388bfd;
+    background: #161b22;
+    color: #ffffff;
+    padding: 0 1;
     margin-right: 1;
-    border: tall $accent;
 }
 
 #search-input:focus {
-    border: tall $primary;
+    border: round #58a6ff;
 }
 
-#btn-search {
-    margin-right: 1;
-    min-width: 12;
-}
-
-#btn-generator {
-    margin-right: 1;
-    min-width: 14;
-}
-
-#btn-clear {
-    min-width: 10;
-}
-
-#tld-panel {
-    height: auto;
-    margin-top: 1;
-    padding: 0 1;
-}
-
-.section-label {
-    text-style: bold;
-    color: $accent;
-    margin-bottom: 0;
-}
-
-#preset-buttons {
-    layout: horizontal;
-    height: auto;
-    margin-bottom: 1;
-}
-
-.preset-btn {
-    margin-right: 1;
-    height: 1;
-    min-width: 10;
-    padding: 0 1;
-    background: $surface-lighten-1;
-    color: $text-muted;
-    border: none;
-}
-
-.preset-btn:hover {
-    background: $primary;
-    color: $text;
-}
-
-#tld-checkboxes {
-    layout: horizontal;
-    height: auto;
-    margin-bottom: 1;
-}
-
-.tld-check {
-    border: none !important;
-    padding: 0 1;
-    height: 1;
-    width: auto;
-    margin-right: 1;
-    background: transparent;
-}
-
-.tld-check:focus {
-    border: none !important;
-    background: $primary 30%;
-}
-
-#filter-stats-bar {
-    layout: horizontal;
+.action-btn {
     height: 3;
-    padding: 0 2;
-    background: $surface-darken-1;
-    align: left middle;
-    border-bottom: solid $surface-lighten-2;
+    border: none;
+    min-width: 11;
+    background: #21262d;
+    color: #c9d1d9;
+    margin-right: 1;
+    text-style: bold;
 }
 
-#chk-available-only {
-    border: none !important;
-    height: 1;
-    width: auto;
-    margin-right: 3;
-    background: transparent;
+.action-btn:hover {
+    background: #30363d;
+    color: #ffffff;
 }
 
-#stats-label {
-    width: 1fr;
-    text-align: right;
-    color: $text-muted;
+.btn-primary {
+    background: #1f6feb;
+    color: #ffffff;
 }
 
-#table-container {
+.btn-primary:hover {
+    background: #388bfd;
+}
+
+/* Contenedor principal de 3 columnas */
+#main-split {
+    layout: horizontal;
     height: 1fr;
+    padding: 1;
+}
+
+/* Paneles individuales */
+.split-pane {
+    height: 100%;
+    background: #161b22;
+    border: round #30363d;
+    padding: 0;
+}
+
+.split-pane:focus-within {
+    border: round #388bfd;
+}
+
+.pane-header {
+    height: 2;
     padding: 0 1;
+    background: #21262d;
+    color: #58a6ff;
+    text-style: bold;
+    border-bottom: solid #30363d;
+}
+
+/* Panel Izquierdo: Sesiones */
+#sidebar-pane {
+    width: 26;
+    margin-right: 1;
+}
+
+#sessions-list {
+    height: 1fr;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+#sessions-list > .option-list--option-highlighted {
+    background: #1f6feb;
+    color: #ffffff;
+    text-style: bold;
+}
+
+#sidebar-footer {
+    height: 3;
+    padding: 0 1;
+    border-top: solid #30363d;
+    align: center middle;
+}
+
+/* Panel Central: Resultados */
+#results-pane {
+    width: 1fr;
+    margin-right: 1;
 }
 
 #results-table {
     height: 100%;
-    border: solid $surface-lighten-1;
+    background: transparent;
+    border: none;
+}
+
+#results-table > .datatable--header {
+    background: #21262d;
+    color: #8b949e;
+    text-style: bold;
+}
+
+#results-table > .datatable--cursor {
+    background: #1f6feb 35%;
+    color: #ffffff;
+    text-style: bold;
+}
+
+/* Panel Derecho: Inspector en vivo */
+#inspector-pane {
+    width: 38;
+}
+
+#inspector-content {
+    height: 1fr;
+    padding: 1;
+}
+
+.inspector-title {
+    text-style: bold;
+    color: #ffffff;
+    margin-bottom: 1;
+}
+
+.inspector-badge {
+    padding: 0 1;
+    margin-bottom: 1;
+    height: 1;
+    text-style: bold;
+}
+
+.badge-available {
+    background: #238636;
+    color: #ffffff;
+}
+
+.badge-taken {
+    background: #da3633;
+    color: #ffffff;
+}
+
+.badge-querying {
+    background: #d29922;
+    color: #000000;
+}
+
+.inspector-section {
+    margin-top: 1;
+    margin-bottom: 0;
+    color: #8b949e;
+    text-style: bold;
+}
+
+.inspector-field {
+    color: #c9d1d9;
+    margin-bottom: 0;
+}
+
+.inspector-links {
+    margin-top: 1;
+    padding: 1;
+    background: #0d1117;
+    border: solid #30363d;
+}
+
+/* Barra inferior (Pills / Controles) */
+#bottom-bar {
+    layout: horizontal;
+    height: 3;
+    padding: 0 1;
+    background: #161b22;
+    border-top: solid #30363d;
+    align: left middle;
+}
+
+.pill-btn {
+    height: 2;
+    margin-right: 1;
+    padding: 0 1;
+    background: #21262d;
+    color: #c9d1d9;
+    border: none;
+    text-style: bold;
+}
+
+.pill-btn:hover {
+    background: #30363d;
+    color: #ffffff;
+}
+
+.pill-active {
+    background: #238636;
+    color: #ffffff;
+}
+
+#status-stats {
+    width: 1fr;
+    text-align: right;
+    color: #8b949e;
+    padding-right: 1;
 }
 
 /* Modales */
-DomainDetailModal, GeneratorModal, ExportModal {
-    align: center middle;
-    background: rgba(0, 0, 0, 0.7);
-}
-
 .modal-dialog {
-    width: 70;
+    width: 65;
     height: auto;
     max-height: 85%;
     padding: 1 2;
-    background: $surface;
-    border: thick $primary;
+    background: #161b22;
+    border: round #388bfd;
 }
 
-.modal-title {
-    text-style: bold;
-    text-align: center;
-    color: $primary;
-    margin-bottom: 1;
-    border-bottom: solid $surface-lighten-1;
-    padding-bottom: 1;
-}
-
-.detail-row {
+.tld-grid-container {
+    grid-size: 4;
+    grid-gutter: 0 1;
+    height: auto;
     margin: 1 0;
-    color: $text;
-}
-
-.detail-label {
-    text-style: bold;
-    color: $accent;
-    width: 18;
-}
-
-.detail-value {
-    color: $text;
 }
 
 .modal-buttons {
     layout: horizontal;
     align: right middle;
-    margin-top: 2;
+    margin-top: 1;
     height: auto;
 }
 
@@ -180,12 +263,11 @@ DomainDetailModal, GeneratorModal, ExportModal {
     margin-left: 1;
 }
 
-.status-badge-avail {
-    color: $success;
+.modal-title {
     text-style: bold;
-}
-
-.status-badge-taken {
-    color: $error;
-    text-style: bold;
+    text-align: center;
+    color: #58a6ff;
+    margin-bottom: 1;
+    border-bottom: solid #30363d;
+    padding-bottom: 1;
 }

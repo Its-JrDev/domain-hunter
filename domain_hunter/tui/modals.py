@@ -1,5 +1,5 @@
-"""Diálogos modales para la TUI de Domain Hunter:
-- DomainDetailModal: Muestra información exhaustiva de RDAP/WHOIS.
+"""Diálogos modales para Domain Hunter:
+- TLDSelectorModal: Configuración rápida y limpia de TLDs seleccionados.
 - GeneratorModal: Generador visual de ideas y variaciones.
 - ExportModal: Exportación flexible de dominios a CSV, TXT o JSON.
 """
@@ -8,62 +8,60 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, RadioButton, RadioSet, Static
 
 from domain_hunter.engine import DomainResult
 from domain_hunter.generator import generate_variations
 
+ALL_AVAILABLE_TLDS = [
+    "com", "net", "org", "io", "ai", "dev", "app", "co",
+    "xyz", "es", "me", "tech", "online", "lat", "mx", "cl",
+    "info", "cloud", "store", "space", "sh", "pro"
+]
 
-class DomainDetailModal(ModalScreen[None]):
-    """Modal para ver los detalles completos de un dominio."""
 
-    def __init__(self, result: DomainResult) -> None:
+class TLDSelectorModal(ModalScreen[list[str] | None]):
+    """Modal para seleccionar TLDs de forma ordenada sin saturar la pantalla principal."""
+
+    def __init__(self, current_tlds: list[str]) -> None:
         super().__init__()
-        self.item = result
+        self.current_tlds = set(current_tlds)
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="modal-dialog"):
-            yield Label(f"Detalles: {self.item.domain.upper()}", classes="modal-title")
-            with VerticalScroll():
-                status_class = "status-badge-avail" if self.item.is_available else "status-badge-taken"
-                yield Static(f"Estado: [{status_class}]{self.item.display_status}[/]", classes="detail-row")
+            yield Label("🌐 Configurar Extensiones (TLDs)", classes="modal-title")
+            yield Label("Selecciona las extensiones a consultar:")
 
-                if self.item.registrar:
-                    yield Static(f"[b]Registrador:[/] {self.item.registrar}", classes="detail-row")
-                if self.item.created_date:
-                    yield Static(f"[b]Fecha Registro:[/] {self.item.created_date}", classes="detail-row")
-                if self.item.expiry_date:
-                    yield Static(f"[b]Fecha Vencimiento:[/] {self.item.expiry_date}", classes="detail-row")
-                if self.item.nameservers:
-                    ns_text = ", ".join(self.item.nameservers)
-                    yield Static(f"[b]Servidores DNS:[/] {ns_text}", classes="detail-row")
-                if self.item.status_codes:
-                    codes_text = ", ".join(self.item.status_codes[:4])
-                    yield Static(f"[b]Códigos EPP:[/] {codes_text}", classes="detail-row")
-                if self.item.notes:
-                    yield Static(f"[b]Notas:[/] {self.item.notes}", classes="detail-row")
-
-                if self.item.is_available:
-                    yield Static(
-                        "\n[dim]Enlaces para registro rápido:[/dim]\n"
-                        f"• Cloudflare: https://dash.cloudflare.com/?to=/:account/domains/register/{self.item.domain}\n"
-                        f"• Porkbun:    https://porkbun.com/checkout/search?q={self.item.domain}\n"
-                        f"• Namecheap:  https://www.namecheap.com/domains/registration/results/?domain={self.item.domain}",
-                        classes="detail-row",
+            with Grid(id="tld-grid", classes="tld-grid-container"):
+                for tld in ALL_AVAILABLE_TLDS:
+                    yield Checkbox(
+                        f".{tld}",
+                        value=(tld in self.current_tlds),
+                        id=f"sel-tld-{tld}",
                     )
 
             with Horizontal(classes="modal-buttons"):
-                yield Button("Cerrar", variant="primary", id="btn-close-modal", classes="modal-btn")
+                yield Button("Aplicar", variant="primary", id="btn-apply-tlds", classes="modal-btn")
+                yield Button("Cancelar", variant="default", id="btn-cancel-tlds", classes="modal-btn")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-close-modal":
-            self.dismiss()
+        if event.button.id == "btn-cancel-tlds":
+            self.dismiss(None)
+        elif event.button.id == "btn-apply-tlds":
+            selected = []
+            for tld in ALL_AVAILABLE_TLDS:
+                try:
+                    chk = self.query_one(f"#sel-tld-{tld}", Checkbox)
+                    if chk.value:
+                        selected.append(tld)
+                except Exception:
+                    pass
+            self.dismiss(selected or ["com"])
 
 
 class GeneratorModal(ModalScreen[list[str] | None]):
