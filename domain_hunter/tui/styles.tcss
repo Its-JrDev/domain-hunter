@@ -1,0 +1,180 @@
+/* Estilos TCSS para Domain Hunter */
+
+Screen {
+    layout: vertical;
+    background: $surface;
+    color: $text;
+}
+
+#top-panel {
+    height: auto;
+    padding: 1 2;
+    background: $panel;
+    border-bottom: solid $primary;
+}
+
+#search-row {
+    height: auto;
+    layout: horizontal;
+    align: left middle;
+    margin-bottom: 1;
+}
+
+#search-input {
+    width: 1fr;
+    margin-right: 1;
+    border: tall $accent;
+}
+
+#search-input:focus {
+    border: tall $primary;
+}
+
+#btn-search {
+    margin-right: 1;
+    min-width: 12;
+}
+
+#btn-generator {
+    margin-right: 1;
+    min-width: 14;
+}
+
+#btn-clear {
+    min-width: 10;
+}
+
+#tld-panel {
+    height: auto;
+    margin-top: 1;
+    padding: 0 1;
+}
+
+.section-label {
+    text-style: bold;
+    color: $accent;
+    margin-bottom: 0;
+}
+
+#preset-buttons {
+    layout: horizontal;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.preset-btn {
+    margin-right: 1;
+    height: 1;
+    min-width: 10;
+    padding: 0 1;
+    background: $surface-lighten-1;
+    color: $text-muted;
+    border: none;
+}
+
+.preset-btn:hover {
+    background: $primary;
+    color: $text;
+}
+
+#tld-checkboxes {
+    layout: horizontal;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.tld-check {
+    margin-right: 1;
+    padding: 0;
+    height: 1;
+}
+
+#filter-stats-bar {
+    layout: horizontal;
+    height: 3;
+    padding: 0 2;
+    background: $surface-darken-1;
+    align: left middle;
+    border-bottom: solid $surface-lighten-2;
+}
+
+#chk-available-only {
+    width: auto;
+    margin-right: 3;
+}
+
+#stats-label {
+    width: 1fr;
+    text-align: right;
+    color: $text-muted;
+}
+
+#table-container {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#results-table {
+    height: 100%;
+    border: solid $surface-lighten-1;
+}
+
+/* Modales */
+DomainDetailModal, GeneratorModal, ExportModal {
+    align: center middle;
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.modal-dialog {
+    width: 70;
+    height: auto;
+    max-height: 85%;
+    padding: 1 2;
+    background: $surface;
+    border: thick $primary;
+}
+
+.modal-title {
+    text-style: bold;
+    text-align: center;
+    color: $primary;
+    margin-bottom: 1;
+    border-bottom: solid $surface-lighten-1;
+    padding-bottom: 1;
+}
+
+.detail-row {
+    margin: 1 0;
+    color: $text;
+}
+
+.detail-label {
+    text-style: bold;
+    color: $accent;
+    width: 18;
+}
+
+.detail-value {
+    color: $text;
+}
+
+.modal-buttons {
+    layout: horizontal;
+    align: right middle;
+    margin-top: 2;
+    height: auto;
+}
+
+.modal-btn {
+    margin-left: 1;
+}
+
+.status-badge-avail {
+    color: $success;
+    text-style: bold;
+}
+
+.status-badge-taken {
+    color: $error;
+    text-style: bold;
+}

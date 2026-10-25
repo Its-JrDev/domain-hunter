@@ -1,0 +1,22 @@
+[project]
+name = "domain-hunter"
+version = "0.1.0"
+description = "Buscador interactivo y ultrarrápido de disponibilidad de dominios con TUI en Python"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "jr" }
+]
+dependencies = [
+    "textual>=0.70.0",
+    "httpx>=0.27.0",
+    "dnspython>=2.6.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+domain-hunter = "domain_hunter.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
