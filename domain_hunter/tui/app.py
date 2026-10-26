@@ -34,6 +34,21 @@ PRESET_LISTS: dict[str, list[str]] = {
     "Latam/ES": ["es", "lat", "mx", "cl", "co", "com"],
 }
 
+DEFAULT_TLDS: list[str] = [
+    "com",
+    "io",
+    "ai",
+    "dev",
+    "app",
+    "co",
+    "xyz",
+    "es",
+    "net",
+    "org",
+    "tech",
+    "me",
+]
+
 CSS_PATH = Path(__file__).parent / "styles.tcss"
 
 
